@@ -2386,6 +2386,143 @@ mod tests {
             result
         );
     }
+
+    #[test]
+    fn smart_tab_mode_parses_snake_case_strings() {
+        use wezterm_dynamic::{FromDynamic, FromDynamicOptions, Value};
+
+        let options = FromDynamicOptions::default();
+
+        // snake_case variants (written by kaku config TUI)
+        let val = Value::String("completion_first".into());
+        assert_eq!(
+            super::SmartTabMode::from_dynamic(&val, options).unwrap(),
+            super::SmartTabMode::CompletionFirst
+        );
+
+        let val = Value::String("suggestion_first".into());
+        assert_eq!(
+            super::SmartTabMode::from_dynamic(&val, options).unwrap(),
+            super::SmartTabMode::SuggestionFirst
+        );
+
+        let val = Value::String("off".into());
+        assert_eq!(
+            super::SmartTabMode::from_dynamic(&val, options).unwrap(),
+            super::SmartTabMode::Off
+        );
+
+        // PascalCase variants (alternative accepted form)
+        let val = Value::String("CompletionFirst".into());
+        assert_eq!(
+            super::SmartTabMode::from_dynamic(&val, options).unwrap(),
+            super::SmartTabMode::CompletionFirst
+        );
+
+        let val = Value::String("Off".into());
+        assert_eq!(
+            super::SmartTabMode::from_dynamic(&val, options).unwrap(),
+            super::SmartTabMode::Off
+        );
+
+        // Invalid value should error
+        let val = Value::String("invalid_mode".into());
+        assert!(super::SmartTabMode::from_dynamic(&val, options).is_err());
+    }
+
+    #[test]
+    fn smart_tab_mode_field_loads_without_unknown_field_error() {
+        use std::collections::BTreeMap;
+        use wezterm_dynamic::{FromDynamic, FromDynamicOptions, UnknownFieldAction, Value};
+
+        let mut map: BTreeMap<Value, Value> = BTreeMap::new();
+        map.insert(
+            Value::String("smart_tab_mode".to_string()),
+            Value::String("off".to_string()),
+        );
+        let value = Value::Object(map.into());
+
+        let result = super::Config::from_dynamic(
+            &value,
+            FromDynamicOptions {
+                unknown_fields: UnknownFieldAction::Deny,
+                deprecated_fields: UnknownFieldAction::Warn,
+            },
+        );
+        assert!(
+            result.is_ok(),
+            "config with smart_tab_mode must load without error: {:?}",
+            result
+        );
+        let config = result.unwrap();
+        assert_eq!(config.smart_tab_mode, super::SmartTabMode::Off);
+    }
+
+    #[test]
+    fn smart_tab_off_sets_disable_env_var() {
+        use portable_pty::CommandBuilder;
+
+        let mut config = super::Config::default();
+        config.smart_tab_mode = super::SmartTabMode::Off;
+
+        let mut cmd = CommandBuilder::new_default_prog();
+        config.apply_cmd_defaults(&mut cmd, None, None);
+
+        assert_eq!(
+            cmd.get_env("KAKU_SMART_TAB_DISABLE"),
+            Some(std::ffi::OsStr::new("1")),
+            "SmartTabMode::Off must set KAKU_SMART_TAB_DISABLE=1"
+        );
+        assert_eq!(
+            cmd.get_env("KAKU_TAB_ACCEPT_SUGGEST_FIRST"),
+            None,
+            "SmartTabMode::Off must not set KAKU_TAB_ACCEPT_SUGGEST_FIRST"
+        );
+    }
+
+    #[test]
+    fn smart_tab_suggestion_first_sets_accept_env_var() {
+        use portable_pty::CommandBuilder;
+
+        let mut config = super::Config::default();
+        config.smart_tab_mode = super::SmartTabMode::SuggestionFirst;
+
+        let mut cmd = CommandBuilder::new_default_prog();
+        config.apply_cmd_defaults(&mut cmd, None, None);
+
+        assert_eq!(
+            cmd.get_env("KAKU_TAB_ACCEPT_SUGGEST_FIRST"),
+            Some(std::ffi::OsStr::new("1")),
+            "SmartTabMode::SuggestionFirst must set KAKU_TAB_ACCEPT_SUGGEST_FIRST=1"
+        );
+        assert_eq!(
+            cmd.get_env("KAKU_SMART_TAB_DISABLE"),
+            None,
+            "SmartTabMode::SuggestionFirst must not set KAKU_SMART_TAB_DISABLE"
+        );
+    }
+
+    #[test]
+    fn smart_tab_completion_first_sets_no_env_var() {
+        use portable_pty::CommandBuilder;
+
+        let mut config = super::Config::default();
+        config.smart_tab_mode = super::SmartTabMode::CompletionFirst;
+
+        let mut cmd = CommandBuilder::new_default_prog();
+        config.apply_cmd_defaults(&mut cmd, None, None);
+
+        assert_eq!(
+            cmd.get_env("KAKU_SMART_TAB_DISABLE"),
+            None,
+            "SmartTabMode::CompletionFirst must not set KAKU_SMART_TAB_DISABLE"
+        );
+        assert_eq!(
+            cmd.get_env("KAKU_TAB_ACCEPT_SUGGEST_FIRST"),
+            None,
+            "SmartTabMode::CompletionFirst must not set KAKU_TAB_ACCEPT_SUGGEST_FIRST"
+        );
+    }
 }
 
 fn default_term() -> String {
