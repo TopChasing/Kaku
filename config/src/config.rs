@@ -263,6 +263,12 @@ pub struct Config {
     #[dynamic(default)]
     pub set_environment_variables: HashMap<String, String>,
 
+    /// Controls how the Tab key behaves in zsh inside Kaku sessions.
+    /// The environment variables `KAKU_SMART_TAB_DISABLE` and
+    /// `KAKU_TAB_ACCEPT_SUGGEST_FIRST` are set automatically based on this.
+    #[dynamic(default)]
+    pub smart_tab_mode: SmartTabMode,
+
     /// Specifies the height of a new window, expressed in character cells.
     #[dynamic(default = "default_initial_rows", validate = "validate_row_or_col")]
     pub initial_rows: u16,
@@ -2008,6 +2014,19 @@ impl Config {
             }
         }
 
+        // Smart Tab mode: set the shell env var so setup_zsh.sh picks it up.
+        // User-set env vars in the loop above (from set_environment_variables)
+        // take precedence because they run first and the shell rc can override.
+        match self.smart_tab_mode {
+            SmartTabMode::Off => {
+                cmd.env("KAKU_SMART_TAB_DISABLE", "1");
+            }
+            SmartTabMode::SuggestionFirst => {
+                cmd.env("KAKU_TAB_ACCEPT_SUGGEST_FIRST", "1");
+            }
+            SmartTabMode::CompletionFirst => {}
+        }
+
         if wsl_env.is_some() || cfg!(windows) || crate::version::running_under_wsl() {
             let mut wsl_env = wsl_env.unwrap_or_default();
             if !wsl_env.is_empty() {
@@ -2831,6 +2850,36 @@ impl FromDynamic for BoldBrightening {
                 Ok(false) => Ok(Self::No),
                 Err(_) => Err(err),
             },
+        }
+    }
+}
+
+/// Controls how the Tab key behaves in zsh inside Kaku sessions.
+#[derive(Debug, ToDynamic, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SmartTabMode {
+    /// Tab shows the completion list; use arrow keys to accept autosuggestions.
+    #[default]
+    CompletionFirst,
+    /// Tab accepts autosuggestions when available, falls back to completion.
+    SuggestionFirst,
+    /// Disables Smart Tab entirely, restoring native zsh Tab behavior.
+    Off,
+}
+
+impl FromDynamic for SmartTabMode {
+    fn from_dynamic(
+        value: &wezterm_dynamic::Value,
+        options: wezterm_dynamic::FromDynamicOptions,
+    ) -> Result<Self, wezterm_dynamic::Error> {
+        let s = String::from_dynamic(value, options)?;
+        match s.as_str() {
+            "completion_first" | "CompletionFirst" => Ok(Self::CompletionFirst),
+            "suggestion_first" | "SuggestionFirst" => Ok(Self::SuggestionFirst),
+            "off" | "Off" => Ok(Self::Off),
+            other => Err(wezterm_dynamic::Error::Message(format!(
+                "`{other}` is not a valid SmartTabMode, use one of \
+                 `completion_first`, `suggestion_first`, or `off`"
+            ))),
         }
     }
 }
