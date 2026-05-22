@@ -2014,17 +2014,12 @@ impl Config {
             }
         }
 
-        // Smart Tab mode: set the shell env var so setup_zsh.sh picks it up.
-        // User-set env vars in the loop above (from set_environment_variables)
-        // take precedence because they run first and the shell rc can override.
-        match self.smart_tab_mode {
-            SmartTabMode::Off => {
-                cmd.env("KAKU_SMART_TAB_DISABLE", "1");
+        if !smart_tab_env_is_explicit(cmd) {
+            match self.smart_tab_mode {
+                SmartTabMode::Off => cmd.env(KAKU_SMART_TAB_DISABLE, "1"),
+                SmartTabMode::SuggestionFirst => cmd.env(KAKU_TAB_ACCEPT_SUGGEST_FIRST, "1"),
+                SmartTabMode::CompletionFirst => {}
             }
-            SmartTabMode::SuggestionFirst => {
-                cmd.env("KAKU_TAB_ACCEPT_SUGGEST_FIRST", "1");
-            }
-            SmartTabMode::CompletionFirst => {}
         }
 
         if wsl_env.is_some() || cfg!(windows) || crate::version::running_under_wsl() {
@@ -2458,14 +2453,19 @@ mod tests {
         assert_eq!(config.smart_tab_mode, super::SmartTabMode::Off);
     }
 
+    fn smart_tab_test_command() -> portable_pty::CommandBuilder {
+        let mut cmd = portable_pty::CommandBuilder::new_default_prog();
+        cmd.env_remove(super::KAKU_SMART_TAB_DISABLE);
+        cmd.env_remove(super::KAKU_TAB_ACCEPT_SUGGEST_FIRST);
+        cmd
+    }
+
     #[test]
     fn smart_tab_off_sets_disable_env_var() {
-        use portable_pty::CommandBuilder;
-
         let mut config = super::Config::default();
         config.smart_tab_mode = super::SmartTabMode::Off;
 
-        let mut cmd = CommandBuilder::new_default_prog();
+        let mut cmd = smart_tab_test_command();
         config.apply_cmd_defaults(&mut cmd, None, None);
 
         assert_eq!(
@@ -2482,12 +2482,10 @@ mod tests {
 
     #[test]
     fn smart_tab_suggestion_first_sets_accept_env_var() {
-        use portable_pty::CommandBuilder;
-
         let mut config = super::Config::default();
         config.smart_tab_mode = super::SmartTabMode::SuggestionFirst;
 
-        let mut cmd = CommandBuilder::new_default_prog();
+        let mut cmd = smart_tab_test_command();
         config.apply_cmd_defaults(&mut cmd, None, None);
 
         assert_eq!(
@@ -2504,12 +2502,10 @@ mod tests {
 
     #[test]
     fn smart_tab_completion_first_sets_no_env_var() {
-        use portable_pty::CommandBuilder;
-
         let mut config = super::Config::default();
         config.smart_tab_mode = super::SmartTabMode::CompletionFirst;
 
-        let mut cmd = CommandBuilder::new_default_prog();
+        let mut cmd = smart_tab_test_command();
         config.apply_cmd_defaults(&mut cmd, None, None);
 
         assert_eq!(
@@ -2521,6 +2517,38 @@ mod tests {
             cmd.get_env("KAKU_TAB_ACCEPT_SUGGEST_FIRST"),
             None,
             "SmartTabMode::CompletionFirst must not set KAKU_TAB_ACCEPT_SUGGEST_FIRST"
+        );
+    }
+
+    #[test]
+    fn smart_tab_respects_existing_disable_env_var() {
+        let mut config = super::Config::default();
+        config.smart_tab_mode = super::SmartTabMode::SuggestionFirst;
+
+        let mut cmd = smart_tab_test_command();
+        cmd.env(super::KAKU_SMART_TAB_DISABLE, "1");
+        config.apply_cmd_defaults(&mut cmd, None, None);
+
+        assert_eq!(
+            cmd.get_env(super::KAKU_SMART_TAB_DISABLE),
+            Some(std::ffi::OsStr::new("1"))
+        );
+        assert_eq!(cmd.get_env(super::KAKU_TAB_ACCEPT_SUGGEST_FIRST), None);
+    }
+
+    #[test]
+    fn smart_tab_respects_existing_suggestion_first_env_var() {
+        let mut config = super::Config::default();
+        config.smart_tab_mode = super::SmartTabMode::Off;
+
+        let mut cmd = smart_tab_test_command();
+        cmd.env(super::KAKU_TAB_ACCEPT_SUGGEST_FIRST, "1");
+        config.apply_cmd_defaults(&mut cmd, None, None);
+
+        assert_eq!(cmd.get_env(super::KAKU_SMART_TAB_DISABLE), None);
+        assert_eq!(
+            cmd.get_env(super::KAKU_TAB_ACCEPT_SUGGEST_FIRST),
+            Some(std::ffi::OsStr::new("1"))
         );
     }
 }
@@ -2989,6 +3017,14 @@ impl FromDynamic for BoldBrightening {
             },
         }
     }
+}
+
+const KAKU_SMART_TAB_DISABLE: &str = "KAKU_SMART_TAB_DISABLE";
+const KAKU_TAB_ACCEPT_SUGGEST_FIRST: &str = "KAKU_TAB_ACCEPT_SUGGEST_FIRST";
+
+fn smart_tab_env_is_explicit(cmd: &CommandBuilder) -> bool {
+    cmd.get_env(KAKU_SMART_TAB_DISABLE).is_some()
+        || cmd.get_env(KAKU_TAB_ACCEPT_SUGGEST_FIRST).is_some()
 }
 
 /// Controls how the Tab key behaves in zsh inside Kaku sessions.

@@ -163,7 +163,7 @@ Kaku's Smart Tab overrides the Tab key in zsh to provide smarter completion beha
 
 | Mode | Behavior | Environment Variable |
 | :--- | :--- | :--- |
-| Completion First (default) | Tab shows the completion list; use `→` to accept autosuggestions | — |
+| Completion First (default) | Tab shows the completion list; use `->` to accept autosuggestions | - |
 | Suggestion First | Tab accepts autosuggestions when available, falls back to completion | `KAKU_TAB_ACCEPT_SUGGEST_FIRST=1` |
 | Off | Disables Smart Tab entirely, restoring native zsh Tab behavior | `KAKU_SMART_TAB_DISABLE=1` |
 
@@ -175,7 +175,7 @@ config.smart_tab_mode = "suggestion_first"   -- Tab accepts autosuggestions firs
 config.smart_tab_mode = "off"                -- disable Smart Tab
 ```
 
-If you prefer environment variables (e.g. because you share your zshrc across terminals), add one of these before sourcing the Kaku shell integration:
+If you prefer environment variables (for example, because you share your zshrc across terminals), add one of these before sourcing the Kaku shell integration:
 
 ```zsh
 export KAKU_TAB_ACCEPT_SUGGEST_FIRST=1  # suggestion-first mode
@@ -187,4 +187,4 @@ export KAKU_SMART_TAB_DISABLE=1         # disable Smart Tab
 set -gx KAKU_SMART_TAB_DISABLE 1
 ```
 
-> **Note:** Environment variables set in your shell rc take precedence over `kaku.lua` settings. Smart Tab is only active inside Kaku sessions (`TERM_PROGRAM=Kaku`).
+Environment variables set in your shell rc take precedence over `kaku.lua` settings. Smart Tab is only active inside Kaku sessions (`TERM_PROGRAM=Kaku`).

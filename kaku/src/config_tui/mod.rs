@@ -1572,6 +1572,41 @@ mod tests {
     }
 
     #[test]
+    fn smart_tab_mode_round_trips_display_and_lua_values() {
+        assert_eq!(
+            App::normalize_value("smart_tab_mode", "'completion_first'"),
+            Some("Completion First".into())
+        );
+        assert_eq!(
+            App::normalize_value("smart_tab_mode", "\"suggestion_first\""),
+            Some("Suggestion First".into())
+        );
+        assert_eq!(
+            App::normalize_value("smart_tab_mode", "'off'"),
+            Some("Off".into())
+        );
+        assert_eq!(App::normalize_value("smart_tab_mode", "'unknown'"), None);
+    }
+
+    #[test]
+    fn smart_tab_mode_serializes_selected_option() {
+        let mut app = test_app();
+        let idx = app
+            .fields
+            .iter()
+            .position(|f| f.lua_key == "smart_tab_mode")
+            .expect("smart_tab_mode field to exist");
+
+        assert_eq!(app.to_lua_value(&app.fields[idx]), "'completion_first'");
+
+        app.fields[idx].value = "Suggestion First".to_string();
+        assert_eq!(app.to_lua_value(&app.fields[idx]), "'suggestion_first'");
+
+        app.fields[idx].value = "Off".to_string();
+        assert_eq!(app.to_lua_value(&app.fields[idx]), "'off'");
+    }
+
+    #[test]
     fn color_scheme_defaults_to_auto() {
         let app = test_app();
         let field = app
